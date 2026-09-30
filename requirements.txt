@@ -1,0 +1,10 @@
+Flask==3.1.0
+python-dotenv==1.0.1
+openai==1.60.0
+chromadb==0.5.23
+sentence-transformers==3.3.1
+beautifulsoup4==4.12.3
+requests==2.32.3
+pandas==2.2.3
+pypdf==5.1.0
+gunicorn==23.0.0

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema RAG Educacional - Azure OpenAI</title>
+    <style>
+        :root {
+            --primary-color: #0078d4;
+            --bg-color: #f3f2f1;
+            --card-bg: #ffffff;
+            --text-color: #323130;
+            --border-color: #edebe9;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #605e5c;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 1px solid #8a8886;
+            border-radius: 4px;
+            font-size: 1rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #106ebe;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .result-box {
+            margin-top: 25px;
+            padding: 20px;
+            background-color: #faf9f8;
+            border-left: 4px solid var(--primary-color);
+            border-radius: 4px;
+            display: none;
+        }
+        .result-box h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        details {
+            margin-top: 15px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px;
+        }
+        summary {
+            font-weight: 600;
+            cursor: pointer;
+            color: #201f1e;
+        }
+        .audit-item {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fdf3f2;
+            border-left: 3px solid #d83b01;
+            font-size: 0.9rem;
+        }
+        .audit-source {
+            font-weight: bold;
+            color: #a80000;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Assistente RAG Educacional</h1>
+        <p class="subtitle">Consulta inteligente baseada em Web Scraping, Dados Tabulares e Documentação PDF</p>
+        
+        <div class="form-group">
+            <textarea id="perguntaInput" placeholder="Digite sua dúvida institucional ou acadêmica aqui..."></textarea>
+        </div>
+        <button id="enviarBtn" onclick="enviarPergunta()">Consultar Base de Conhecimento</button>
+
+        <div class="loading" id="loadingSpinner">
+            <div class="spinner"></div>
+            <p style="margin-top: 8px; color: #605e5c;">Buscando contexto vetorial e gerando resposta com Azure OpenAI...</p>
+        </div>
+
+        <div class="result-box" id="resultBox">
+            <h3>Resposta do Sistema:</h3>
+            <div id="respostaTexto" style="white-space: pre-wrap; line-height: 1.5;"></div>
+            
+            <details id="auditDetails">
+                <summary>Auditoria de Trechos Recuperados (ChromaDB)</summary>
+                <div id="auditContainer"></div>
+            </details>
+        </div>
+    </div>
+
+    <script>
+        async function enviarPergunta() {
+            const pergunta = document.getElementById('perguntaInput').value.trim();
+            const btn = document.getElementById('enviarBtn');
+            const spinner = document.getElementById('loadingSpinner');
+            const resultBox = document.getElementById('resultBox');
+            const respostaTexto = document.getElementById('respostaTexto');
+            const auditContainer = document.getElementById('auditContainer');
+
+            if (!pergunta) {
+                alert("Por favor, digite uma pergunta.");
+                return;
+            }
+
+            btn.disabled = true;
+            spinner.style.display = "block";
+            resultBox.style.display = "none";
+            respostaTexto.innerHTML = "";
+            auditContainer.innerHTML = "";
+
+            try {
+                const response = await fetch('/perguntar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pergunta })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    respostaTexto.innerHTML = data.resposta;
+                    
+                    if (data.auditoria && data.auditoria.length > 0) {
+                        data.auditoria.forEach((item, index) => {
+                            const div = document.createElement('div');
+                            div.className = 'audit-item';
+                            div.innerHTML = `<div class="audit-source">Fonte [${index + 1}]: ${item.fonte}</div><div>${item.texto}</div>`;
+                            auditContainer.appendChild(div);
+                        });
+                    } else {
+                        auditContainer.innerHTML = "<p>Nenhum trecho de auditoria disponível.</p>";
+                    }
+
+                    resultBox.style.display = "block";
+                } else {
+                    alert("Erro: " + (data.erro || "Erro interno ao processar a requisição."));
+                }
+            } catch (error) {
+                alert("Falha de conexão com o servidor: " + error);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
